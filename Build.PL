@@ -17,6 +17,7 @@ my $builder = Module::Build->new(
     },
     requires => {
         'Net::LDAP'              => 0.56,
+	'Config::Simple'         => 4.58,
         #'Foo::Bar::Module' => 5.0401,
     },
     add_to_cleanup     => [ 'Net-LDAP-posixAccount-Manager-*' ],

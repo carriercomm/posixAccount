@@ -49,7 +49,7 @@ Create a new Manager object. This Manager object has two instance fields:
 config_file => configuration file name. The default config file name is "default.cfg".
 The configuration file can have thest property names:
 hostname - LDAP server hostname
-dn - connection dn
+managerdn - connection dn
 password - connection dn password
 
 =cut
@@ -62,7 +62,7 @@ sub new {
   Config::Simple->import_from($config_file,\%conf);
   my $conn=Net::LDAP->new($conf{hostname});
   croak "Error in opening ldap connection.\n" if (!$conn) ;
-  $conn->bind( dn=>$conf{dn},password=>$conf{password} )
+  $conn->bind( managerdn=>$conf{managerdn},password=>$conf{password} )
 	or croak "$@";
   bless {config => \%conf, connection => $conn}, $class;
 }

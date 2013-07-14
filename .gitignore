@@ -1,8 +1,9 @@
 # Avoid configuration metadata file
 MYMETA*
-
+test.conf
 # Avoid Module::Build generated and utility files.
 Build
 _build/
+blib/
 *.bak
 
