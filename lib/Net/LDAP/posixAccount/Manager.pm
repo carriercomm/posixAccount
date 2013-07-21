@@ -67,7 +67,7 @@ sub new {
   Config::Simple->import_from($config_file,\%conf);
   my $conn=Net::LDAP->new($conf{hostname});
   croak "Error in opening ldap connection.\n" if (!$conn) ;
-  $conn->bind( managerdn=>$conf{managerdn},password=>$conf{password} )
+  $conn->bind( $conf{managerdn},password=>$conf{password} )
 	or croak "$@";
   bless {config => \%conf, connection => $conn}, $class;
 }
@@ -111,7 +111,23 @@ sub maxid {
   ref $self or croak "maxid can only used by instance variable.";
   grep /^${category}$/, qw(uid gid) or croak "category must be \"uid\" or \"gid\".";
   defined $increment or $increment = 1;
-  
+  my $dn = $self->{config}{"max_${category}_dn"};
+  my $search = $self->{connection}->search(
+					   base => $dn,
+					   scope => "base",
+					   filter => "(objectclass=*)",
+					   sizelimit => 1,
+					   attrs => ["${category}Number"]
+					  );
+  $search or croak "$dn does not exist. Check config file.";
+  my $entry = $search->shift_entry;
+#  $entry->dump;
+  my $value = $entry->get_value("${category}Number");
+  if ($increment > 0) {
+    $entry->replace("${category}Number" => $value+$increment);
+    $entry->update($self->{connection});
+  }
+  $value;
 }
 
 =head1 AUTHOR
