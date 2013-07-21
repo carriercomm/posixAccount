@@ -4,10 +4,13 @@ use 5.10.1;
 use strict;
 use warnings FATAL => 'all';
 
+use Exporter qw(import);
 use Carp;
 use Net::LDAP;
+use Net::LDAP::Entry;
 use Config::Simple;
 
+our @EXPORT = qw( maxid new );
 
 =head1 NAME
 
@@ -51,6 +54,8 @@ The configuration file can have thest property names:
 hostname - LDAP server hostname
 managerdn - connection dn
 password - connection dn password
+max_uid_dn - the dn of the entry which is  used to savd max uidNumber
+max_gid_dn - the dn of the entry which is used to save max gidNumber
 
 =cut
 
@@ -81,11 +86,32 @@ sub DESTROY {
   }
 }
 
-=head2 function2
+=head2 add_user
+
+add_user( uid, name, role, branch )
+Add new posix user to ldap server."role" has two values for this time: student or staff. "branch" is something like department, it is used to build dn.
 
 =cut
 
-sub function2 {
+sub add_user {
+
+}
+
+=head2 maxid
+
+maxid(category,increment)
+When "category" is "uid", maxid will return the max uidNumber in "max_uid_dn" entry. When "category" is "gid", maxid will return the max gidNumber in "max_gid_dn" entry.
+"increment" is 1 by default, means after get the max uidNumber(or gidNumber), the max uidNumber(or gidNumber) saved in ldap server will be incremented.
+This function use "max_uid_dn"(or max_gid_dn) property in config file,"max_uid_dn" is the dn of entry which saved max uidNumber(or gidNumber). The objectClass attribute of this entry must include "posixAccount", and uidNumber must not be null.
+
+=cut
+
+sub maxid {
+  my ($self, $category, $increment) = @_;
+  ref $self or croak "maxid can only used by instance variable.";
+  grep /^${category}$/, qw(uid gid) or croak "category must be \"uid\" or \"gid\".";
+  defined $increment or $increment = 1;
+  
 }
 
 =head1 AUTHOR
