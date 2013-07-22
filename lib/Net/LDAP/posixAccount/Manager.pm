@@ -3,18 +3,20 @@ package Net::LDAP::posixAccount::Manager;
 use 5.10.1;
 use strict;
 use warnings FATAL => 'all';
+use utf8;
 
 use Exporter qw(import);
 use Carp;
 use Net::LDAP;
 use Net::LDAP::Entry;
 use Config::Simple;
+use List::MoreUtils qw(any);
 
-our @EXPORT = qw( maxid new );
+our @EXPORT = qw( maxid new add_user del_user);
 
 =head1 NAME
 
-Net::LDAP::posixAccount::Manager - The great new Net::LDAP::posixAccount::Manager!
+Net::LDAP::posixAccount::Manager - The convenient class for LDAP manipulating.
 
 =head1 VERSION
 
@@ -72,19 +74,6 @@ sub new {
   bless {config => \%conf, connection => $conn}, $class;
 }
 
-=head2 DESTROY
-
-Unbind from ldap server.
-
-=cut
-
-sub DESTROY {
-  my $self = shift;
-  if(defined $self->{connection}){
-    $self->{connection}->unbind;
-    delete $self->{connection};
-  }
-}
 
 =head2 add_user
 
@@ -94,7 +83,49 @@ Add new posix user to ldap server."role" has two values for this time: student o
 =cut
 
 sub add_user {
+  my ($self, $uid, $name, $role, $branch) = @_;
+  ref $self or croak "add_user can only be called by instance variable.";
+  croak "some parameters missing in add_user." if any {!defined $_} ($uid,$name,$role,$branch);
+  my $dn = "uid=${uid},ou=${branch},ou=${role},ou=people," . "$self->{config}{base}";
+  my $result = $self->{connection}->add( $dn,
+			    attrs => [
+				cn => "$name",
+				sn => substr($name,0,1),
+				gn => substr($name,1),
+				uid => "$uid",
+				homeDirectory => "/nonexistent",
+				uidNumber => $self->maxid("uid",1),
+				gidNumber => $self->{config}{default_gid},
+				userPassword => $uid,
+				objectClass => [qw(top person organizationalPerson inetOrgPerson posixAccount)],
+			   ]
+	);
+    $result->code && carp "Failed to add entry: " , $result->error ;
 
+}
+
+=head2 del_user
+
+del_user(uid)
+delete user by uid. Caution: every entry with this uid will be deleted, there may be two or more entries with same uid.
+
+=cut
+
+sub del_user{
+  my ($self, $uid) = @_;
+  ref $self or croak "del_user can only be called by instance variable.";
+  defined $uid or croak "del_user must have uid.";
+  my $conn = $self->{connection};
+  my $search = $conn->search(
+			     base => $self->{config}{base},
+			     scope => "sub",
+			     filter => "(uid=$uid)",
+			     callback => sub{
+			       return if !defined $_[1];
+			       $_[1]->delete;
+			       $_[1]->update($conn);
+			     }
+			    );
 }
 
 =head2 maxid
@@ -108,7 +139,7 @@ This function use "max_uid_dn"(or max_gid_dn) property in config file,"max_uid_d
 
 sub maxid {
   my ($self, $category, $increment) = @_;
-  ref $self or croak "maxid can only used by instance variable.";
+  ref $self or croak "maxid can only be called by instance variable.";
   grep /^${category}$/, qw(uid gid) or croak "category must be \"uid\" or \"gid\".";
   defined $increment or $increment = 1;
   my $dn = $self->{config}{"max_${category}_dn"};
@@ -128,6 +159,20 @@ sub maxid {
     $entry->update($self->{connection});
   }
   $value;
+}
+
+=head2 DESTROY
+
+Unbind from ldap server.
+
+=cut
+
+sub DESTROY {
+  my $self = shift;
+  if(defined $self->{connection}){
+    $self->{connection}->unbind;
+    delete $self->{connection};
+  }
 }
 
 =head1 AUTHOR
