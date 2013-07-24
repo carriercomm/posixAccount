@@ -12,7 +12,7 @@ use Net::LDAP::Entry;
 use Config::Simple;
 use List::MoreUtils qw(any);
 
-our @EXPORT = qw( maxid new add_user del_user);
+our @EXPORT = qw( maxid new add_user add_group delete del_user);
 
 =head1 NAME
 
@@ -100,7 +100,7 @@ sub add_user {
 				objectClass => [qw(top person organizationalPerson inetOrgPerson posixAccount)],
 			   ]
 	);
-    $result->code && carp "Failed to add entry: " , $result->error ;
+    $result->code && carp "Failed to add entry(add_user): " , $result->error ;
 
 }
 
@@ -115,17 +115,66 @@ sub del_user{
   my ($self, $uid) = @_;
   ref $self or croak "del_user can only be called by instance variable.";
   defined $uid or croak "del_user must have uid.";
+#  my $conn = $self->{connection};
+#  my $search = $conn->search(
+#			     base => $self->{config}{base},
+#			     scope => "sub",
+#			     filter => "(uid=$uid)",
+#			     callback => sub{
+#			       return if !defined $_[1];
+#			       $_[1]->delete;
+#			       $_[1]->update($conn);
+#			     }
+#			    );
+  $self->delete("(uid=$uid)");
+}
+
+=head2 delete
+
+delete(filter)
+delete entry with filter in base subtree. This method is for private useage.
+
+=cut
+
+sub delete{
+  my ($self, $filter) = @_;
+  ref $self or croak "delete can only be called by instance variable.";
+  defined $filter or croak "delete must have filter.";
   my $conn = $self->{connection};
   my $search = $conn->search(
 			     base => $self->{config}{base},
 			     scope => "sub",
-			     filter => "(uid=$uid)",
+			     filter => $filter,
 			     callback => sub{
 			       return if !defined $_[1];
 			       $_[1]->delete;
 			       $_[1]->update($conn);
 			     }
 			    );
+}
+
+=head2 add_group
+
+add_group(name,path1,path2,...)
+Add new posix group to ldap server.
+add_group could have many path parameters, the final dn will composed like this:
+cn=$name,ou=$path2,ou=$path1,$basedn
+
+=cut
+
+sub add_group{
+  my ($self,$name) = splice @_,0,2;
+  ref $self or croak "add_group can only be called by instance variable.";
+  my @path = map "ou=$_,",reverse(@_);
+  my $dn = "cn=$name," . join('',@path) . $self->{config}{base};
+  my $result = $self->{connection}->add($dn,
+				       attrs => [
+						 cn => $name,
+						 gidNumber => $self->maxid("gid",1),
+						 objectClass => [ qw(top posixGroup)]
+						]
+				       );
+  $result->code && carp "Failed add entry(add_group): ", $result->error;
 }
 
 =head2 maxid

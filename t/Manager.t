@@ -46,7 +46,7 @@ my $entry = $conn->search(
 			 filter => "(uid=20130101)",
 			 sizelimit => 1
 			 )->shift_entry;
-ok( $entry->dn eq "uid=20130101,ou=info,ou=students,ou=people,dc=jhc,dc=cn" );
+ok( $entry->dn eq "uid=20130101,ou=info,ou=students,ou=people,$manager->{config}{base}" );
 ok( decode("utf8",$entry->get_value("cn")) eq "托马斯" );
 ok( decode("utf8",$entry->get_value("sn")) eq "托" );
 ok( decode("utf8",$entry->get_value("givenName")) eq "马斯" );
@@ -59,4 +59,24 @@ my $search = $conn->search(
 			 sizelimit => 1
 			 );
 ok( $search->count == 0 );
+
+#test add_group
+$manager->add_group("测试分组","groups","students","info");
+my $group = $conn->search(
+			 base => $manager->{config}{base},
+			 scope => "sub",
+			 filter => "(cn=测试分组)",
+			 sizelimit => 1
+			 )->shift_entry;
+ok( decode("utf8",$group->dn) eq "cn=测试分组,ou=info,ou=students,ou=groups,$manager->{config}{base}" );
+ok( decode("utf8",$group->get_value("cn")) eq "测试分组" );
+$manager->delete("(cn=测试分组)");
+my $groupsearch = $conn->search(
+			 base => $manager->{config}{base},
+			 scope => "sub",
+			 filter => "(cn=测试分组)",
+			 sizelimit => 1
+			 );
+ok( $groupsearch->count == 0 );
+
 done_testing();
