@@ -12,7 +12,7 @@ use Net::LDAP::Entry;
 use Config::Simple;
 use List::MoreUtils qw(any);
 
-our @EXPORT = qw( maxid new add_user add_group delete del_user);
+our @EXPORT = qw( maxid new add_user add_group delete);
 
 =head1 NAME
 
@@ -77,16 +77,19 @@ sub new {
 
 =head2 add_user
 
-add_user( uid, name, role, branch )
-Add new posix user to ldap server."role" has two values for this time: student or staff. "branch" is something like department, it is used to build dn.
+add_user( uid, name, path1, path2, ... )
+Add new posix user to ldap server.
+add_user could have many path parameters, the final dn will composed like this:
+uid=$uid,ou=$path2,ou=$path1,$basedn
 
 =cut
 
 sub add_user {
-  my ($self, $uid, $name, $role, $branch) = @_;
+  my ($self, $uid, $name) = splice @_,0,3;
   ref $self or croak "add_user can only be called by instance variable.";
-  croak "some parameters missing in add_user." if any {!defined $_} ($uid,$name,$role,$branch);
-  my $dn = "uid=${uid},ou=${branch},ou=${role},ou=people," . "$self->{config}{base}";
+  croak "uid or name is missing in add_user." if any {!defined $_} ($uid,$name);
+  my @path = map "ou=$_,",reverse(@_);
+  my $dn = "uid=${uid}," . join('',@path) . "$self->{config}{base}";
   my $result = $self->{connection}->add( $dn,
 			    attrs => [
 				cn => "$name",
@@ -102,31 +105,6 @@ sub add_user {
 	);
     $result->code && carp "Failed to add entry(add_user): " , $result->error ;
 
-}
-
-=head2 del_user
-
-del_user(uid)
-delete user by uid. Caution: every entry with this uid will be deleted, there may be two or more entries with same uid.
-
-=cut
-
-sub del_user{
-  my ($self, $uid) = @_;
-  ref $self or croak "del_user can only be called by instance variable.";
-  defined $uid or croak "del_user must have uid.";
-#  my $conn = $self->{connection};
-#  my $search = $conn->search(
-#			     base => $self->{config}{base},
-#			     scope => "sub",
-#			     filter => "(uid=$uid)",
-#			     callback => sub{
-#			       return if !defined $_[1];
-#			       $_[1]->delete;
-#			       $_[1]->update($conn);
-#			     }
-#			    );
-  $self->delete("(uid=$uid)");
 }
 
 =head2 delete

@@ -39,7 +39,7 @@ my $msg = $conn->add(
 ok( $msg->code == 68, "add already existed dn will get LDAP_ALREADY_EXISTS error code.");
 
 #test add_user
-$manager->add_user("20130101","托马斯","students","info");
+$manager->add_user("20130101","托马斯","people","students","info");
 my $entry = $conn->search(
 			 base => $manager->{config}{base},
 			 scope => "sub",
@@ -51,7 +51,7 @@ ok( decode("utf8",$entry->get_value("cn")) eq "托马斯" );
 ok( decode("utf8",$entry->get_value("sn")) eq "托" );
 ok( decode("utf8",$entry->get_value("givenName")) eq "马斯" );
 ok( $entry->get_value("uid") eq "20130101" );
-$manager->del_user("20130101");
+$manager->delete("(uid=20130101)");
 my $search = $conn->search(
 			 base => $manager->{config}{base},
 			 scope => "sub",
