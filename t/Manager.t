@@ -40,25 +40,17 @@ ok( $msg->code == 68, "add already existed dn will get LDAP_ALREADY_EXISTS error
 
 #test add_user
 $manager->add_user("20130101","托马斯","people","students","info");
-my $entry = $conn->search(
+my $user = $conn->search(
 			 base => $manager->{config}{base},
 			 scope => "sub",
 			 filter => "(uid=20130101)",
 			 sizelimit => 1
 			 )->shift_entry;
-ok( $entry->dn eq "uid=20130101,ou=info,ou=students,ou=people,$manager->{config}{base}" );
-ok( decode("utf8",$entry->get_value("cn")) eq "托马斯" );
-ok( decode("utf8",$entry->get_value("sn")) eq "托" );
-ok( decode("utf8",$entry->get_value("givenName")) eq "马斯" );
-ok( $entry->get_value("uid") eq "20130101" );
-$manager->delete("(uid=20130101)");
-my $search = $conn->search(
-			 base => $manager->{config}{base},
-			 scope => "sub",
-			 filter => "(uid=20130101)",
-			 sizelimit => 1
-			 );
-ok( $search->count == 0 );
+ok( $user->dn eq "uid=20130101,ou=info,ou=students,ou=people,$manager->{config}{base}" );
+ok( decode("utf8",$user->get_value("cn")) eq "托马斯" );
+ok( decode("utf8",$user->get_value("sn")) eq "托" );
+ok( decode("utf8",$user->get_value("givenName")) eq "马斯" );
+ok( $user->get_value("uid") eq "20130101" );
 
 #test add_group
 $manager->add_group("测试分组","groups","students","info");
@@ -70,6 +62,34 @@ my $group = $conn->search(
 			 )->shift_entry;
 ok( decode("utf8",$group->dn) eq "cn=测试分组,ou=info,ou=students,ou=groups,$manager->{config}{base}" );
 ok( decode("utf8",$group->get_value("cn")) eq "测试分组" );
+
+#test associate
+$manager->associate('(cn=测试分组)','(uid=20130101)');
+my $tuser = $conn->search(
+			 base => $manager->{config}{base},
+			 scope => "sub",
+			 filter => "(uid=20130101)",
+			 sizelimit => 1
+			 )->shift_entry;
+my $tgroup = $conn->search(
+			 base => $manager->{config}{base},
+			 scope => "sub",
+			 filter => "(cn=测试分组)",
+			 sizelimit => 1
+			 )->shift_entry;
+ok( $tuser->get_value("gidNumber") == $tgroup->get_value("gidNumber") );
+ok( $tuser->get_value("uid") == $tgroup->get_value("memberUid") );
+
+#delete added test entry.
+$manager->delete("(uid=20130101)");
+my $search = $conn->search(
+			 base => $manager->{config}{base},
+			 scope => "sub",
+			 filter => "(uid=20130101)",
+			 sizelimit => 1
+			 );
+ok( $search->count == 0 );
+
 $manager->delete("(cn=测试分组)");
 my $groupsearch = $conn->search(
 			 base => $manager->{config}{base},

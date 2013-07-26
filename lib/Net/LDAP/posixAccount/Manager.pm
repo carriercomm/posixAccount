@@ -155,6 +155,45 @@ sub add_group{
   $result->code && carp "Failed add entry(add_group): ", $result->error;
 }
 
+=head2 associate
+
+associate(groupfilter,userfilter)
+
+If thers are more than one group entry with $groupfilter, then this method will croak. This method will set user's gidNumber to this group's gidNumber, and add user's uid as group entry's memberUid.
+This method will modify the groupfilter and userfilter. The real groupfilter used to search entry will be:
+(&(filter from parameter)(objectClass=posixGroup))
+The real userfilter used to search entry will be:
+(&(filter from parameter)(objectClass=posixAccount))
+
+=cut
+
+sub associate{
+  my ($self,$groupfilter,$userfilter) = @_;
+  ref $self or croak "associate can only be called by instance variable.";
+  croak "Call associate must provide groupfilter and userfilter." if any {!defined $_} ($groupfilter,$userfilter);
+  $groupfilter = "(&${groupfilter}(objectClass=posixGroup))";
+  $userfilter = "(&${userfilter}(objectClass=posixAccount))";
+  my $conn = $self->{connection};
+  my $search = $conn->search(
+			     base => $self->{config}{base},
+			     scope => "sub",
+			     filter => $groupfilter,
+			     );
+  $search->count == 1 or croak "The groupfilter used by associate to search group entry must return just one entry.";
+  my $group = $search->shift_entry;
+  my @users = $conn->search(
+			    base => $self->{config}{base},
+			    scope => "sub",
+			    filter => $userfilter
+			    )->entries;
+  foreach my $user (@users) {
+    $user->replace(gidNumber=>$group->get_value("gidNumber"));
+    $group->add(memberUid=>$user->get_value("uid"));
+    $user->update($conn);
+    $group->update($conn);
+  }
+}
+
 =head2 maxid
 
 maxid(category,increment)
