@@ -12,7 +12,7 @@ use Net::LDAP::Entry;
 use Config::Simple;
 use List::MoreUtils qw(any);
 
-our @EXPORT = qw( maxid new add_user add_group delete);
+our @EXPORT = qw( maxid new add_user delete mkgroup );
 
 =head1 NAME
 
@@ -131,28 +131,58 @@ sub delete{
 			    );
 }
 
-=head2 add_group
+=head2 mkgroup
 
-add_group(name,path1,path2,...)
-Add new posix group to ldap server.
-add_group could have many path parameters, the final dn will composed like this:
-cn=$name,ou=$path2,ou=$path1,$basedn
+mkgroup(name,path1,path2,...)
+The composed group dn will be:
+cn=$name,...,ou=$path2,ou=$path1,$basedn
+mkgroup can be used to create group entry in ldap server, it can also be used to get an already existed group entry.
+mkgroup returns a hash object, which can be used to manipulate group entry.
 
 =cut
 
-sub add_group{
+sub mkgroup{
   my ($self,$name) = splice @_,0,2;
-  ref $self or croak "add_group can only be called by instance variable.";
+  ref $self or croak "mkgroup can only be called by instance variable.";
+  defined $name or croak "Call mkgroup must provide group name as parameter.";
   my @path = map "ou=$_,",reverse(@_);
   my $dn = "cn=$name," . join('',@path) . $self->{config}{base};
-  my $result = $self->{connection}->add($dn,
-				       attrs => [
-						 cn => $name,
-						 gidNumber => $self->maxid("gid",1),
-						 objectClass => [ qw(top posixGroup)]
-						]
-				       );
-  $result->code && carp "Failed add entry(add_group): ", $result->error;
+  my $con = $self->{connection};
+  my $entry = $con->search(base => $dn, socpe => "base", filter => "(cn=$name)")->shift_entry;
+  $entry or $entry = Net::LDAP::Entry->new( $dn, cn => $name );
+  +{
+    "entry" => sub{ $entry; },
+    "class" => sub{
+      my $groupclass = shift;
+      $entry->changetype("add");
+      given($groupclass){
+	when('posixGroup') {
+	  $entry->add(gidNumber => $self->maxid("gid",1));
+	}
+	when('groupOfNames') {
+	  $entry->add(member => $self->{config}{default_group_of_names_member} );
+	}
+	when('groupOfUniqueNames') {
+	  $entry->add(uniqueMember => $self->{config}{default_group_of_unique_names_member} );
+	}
+      }
+      $entry->add(objectClass => [ ("top",$groupclass) ]);
+    },
+    "addmember" => sub{
+      my @values = $entry->get_value("objectClass");
+      @values == 2 or croak "Group entry($entry->dn) must have just two objectClass values.";
+      my $groupclass = $values[0] eq "top" ? $values[1] : $values[0];
+      $entry->changetype("modify");
+      given($groupclass){
+	when('posixGroup') { $entry->add(memberUid => shift); }
+	when('groupOfNames') { $entry->add(member => shift); }
+	when('groupOfUniqueNames') { $entry->add(uniqueMember => shift); }
+      }
+    },
+    "update" => sub{
+      $entry->update($con);
+    }
+   };
 }
 
 =head2 associate
