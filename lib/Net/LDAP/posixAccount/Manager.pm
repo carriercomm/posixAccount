@@ -12,7 +12,7 @@ use Net::LDAP::Entry;
 use Config::Simple;
 use List::MoreUtils qw(any);
 
-our @EXPORT = qw( maxid new add_user delete mkgroup );
+our @EXPORT = qw( maxid new add_user delete mkgroup mkaccount );
 
 =head1 NAME
 
@@ -74,6 +74,43 @@ sub new {
   bless {config => \%conf, connection => $conn}, $class;
 }
 
+=head2 mkaccount
+mkcount(uid, name, path1, path2, ... )
+Add new posix account to ldap server.
+mkaccount could have many path parameters, the final dn will composed like this:
+uid=$uid,ou=$path2,ou=$path1,$basedn
+
+=cut
+
+sub mkaccount {
+  my ($self, $uid, $name) = splice @_,0,3;
+  ref $self or croak "mkaccount can only be called by instance variable.";
+  croak "uid or name is missing in mkaccount." if any {!defined $_} ($uid,$name);
+  my @path = map "ou=$_,",reverse(@_);
+  my $dn = "uid=${uid}," . join('',@path) . "$self->{config}{base}";
+  my $con = $self->{connection};
+  my $entry = $con->search(base=>$dn, scope=>"base", filter => "(uid=$uid)")->shift_entry;
+  $entry or $entry = Net::LDAP::Entry->new( $dn );
+  +{
+    "entry" => sub {$entry;},
+    "create" => sub {
+      $entry->add(
+		  cn => "$name",
+		  sn => substr($name,0,1),
+		  gn => substr($name,1),
+		  uid => "$uid",
+		  homeDirectory => "/nonexistent",
+		  uidNumber => $self->maxid("uid",1),
+		  gidNumber => $self->{config}{default_gid},
+		  userPassword => $uid,
+		  objectClass => [qw(top person organizationalPerson inetOrgPerson posixAccount)]
+		 );
+    },
+    "update" => sub{
+      $entry->update($con);
+    }
+   }
+}
 
 =head2 add_user
 
@@ -148,7 +185,7 @@ sub mkgroup{
   my @path = map "ou=$_,",reverse(@_);
   my $dn = "cn=$name," . join('',@path) . $self->{config}{base};
   my $con = $self->{connection};
-  my $entry = $con->search(base => $dn, socpe => "base", filter => "(cn=$name)")->shift_entry;
+  my $entry = $con->search(base => $dn, scope => "base", filter => "(name=$name)")->shift_entry;
   $entry or $entry = Net::LDAP::Entry->new( $dn, cn => $name );
   +{
     "entry" => sub{ $entry; },

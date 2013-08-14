@@ -38,8 +38,10 @@ my $msg = $conn->add(
 		    );
 ok( $msg->code == 68, "add already existed dn will get LDAP_ALREADY_EXISTS error code.");
 
-#test add_user
-$manager->add_user("20130101","托马斯","people","students","info");
+#test mkaccount
+my $account = $manager->mkaccount("20130101","托马斯","people","students","info");
+$account->{create}->();
+$account->{update}->();
 my $user = $conn->search(
 			 base => $manager->{config}{base},
 			 scope => "sub",
@@ -52,8 +54,10 @@ ok( decode("utf8",$user->get_value("sn")) eq "托" );
 ok( decode("utf8",$user->get_value("givenName")) eq "马斯" );
 ok( $user->get_value("uid") eq "20130101" );
 
-#test add_group
-$manager->add_group("测试分组","groups","students","info");
+#test mkgroup
+my $g1 = $manager->mkgroup("测试分组","groups","students","info");
+$g1->{class}->("posixGroup");
+$g1->{update}->();
 my $group = $conn->search(
 			 base => $manager->{config}{base},
 			 scope => "sub",
